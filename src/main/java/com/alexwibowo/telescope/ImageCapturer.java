@@ -8,12 +8,16 @@ import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.*;
+import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class ImageCapturer implements Runnable, ImageSource {
@@ -48,11 +52,45 @@ public class ImageCapturer implements Runnable, ImageSource {
     @Override
     public BufferedImage getImage() throws InterruptedException {
         try {
-            final BufferedImage read = ImageIO.read(new File("C:\\dev\\insight\\telescope\\src\\main\\resources\\20141120_212117.jpg"));
-            return compressImage(getScaledImage(read, 640, 480), 0.8f);
+            final Random random = new Random(System.currentTimeMillis());
+            final int i = random.nextInt(2);
+            BufferedImage read;
+            if (i == 0) {
+                read = ImageIO.read(new File("C:\\dev\\insight\\telescope\\src\\main\\resources\\20141120_212117.jpg"));
+            } else {
+                read = ImageIO.read(new File("C:\\dev\\insight\\telescope\\src\\main\\resources\\20141120_212019.jpg"));
+            }
+            final Date now = new Date();
+            return markTimestamp(compressImage(getScaledImage(read, 640, 480), 0.8f), now);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+
+    private BufferedImage markTimestamp(BufferedImage src, Date now) {
+        Graphics2D g2d = (Graphics2D) src.getGraphics();
+        AlphaComposite alpha = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.8f);
+        g2d.setComposite(alpha);
+        g2d.setColor(Color.RED);
+        g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g2d.setFont(new Font("Arial", Font.PLAIN, 20));
+
+        final SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        String watermark = simpleDateFormat.format(now);
+
+        FontMetrics fontMetrics = g2d.getFontMetrics();
+        Rectangle2D rect = fontMetrics.getStringBounds(watermark, g2d);
+
+        g2d.drawString(watermark,
+                (src.getWidth() - (int) rect.getWidth()),
+                (src.getHeight() - (int) rect.getHeight())
+        );
+
+        //Free graphic resources
+        g2d.dispose();
+
+        return src;
     }
 
     private BufferedImage compressImage(BufferedImage src, float compressionFactor) throws IOException {
@@ -63,7 +101,7 @@ public class ImageCapturer implements Runnable, ImageSource {
 
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         ImageOutputStream ios = ImageIO.createImageOutputStream(byteArrayOutputStream);
-        ImageWriter writer = (ImageWriter) writers.next();
+        ImageWriter writer = writers.next();
         writer.setOutput(ios);
         ImageWriteParam param = writer.getDefaultWriteParam();
         // compress to a given quality
@@ -89,7 +127,6 @@ public class ImageCapturer implements Runnable, ImageSource {
             factor = ((double)src.getWidth()/(double)src.getHeight());
             finalw = (int)(finalh * factor);
         }
-
 
         BufferedImage resizedImg = new BufferedImage(finalw, finalh, BufferedImage.TRANSLUCENT);
         Graphics2D g2 = resizedImg.createGraphics();
